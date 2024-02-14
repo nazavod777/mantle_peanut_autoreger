@@ -1,3 +1,4 @@
+import asyncio
 from traceback import format_exc
 
 import curl_cffi.requests.session
@@ -66,9 +67,11 @@ class Reger:
 
             response_text: str = r.text
 
-            if r.json():
+            if not r.json():
+                logger.success(f'{self.account.address} | Successfully Claimed')
                 return True
 
+            logger.error(f'{self.account.address} | Bad Claim Response: {r.text}')
             return False
 
         except Exception as error:
@@ -96,11 +99,30 @@ class Reger:
                 response_text: str = r.text
 
                 if r.json().get('userResults'):
-                    return (float(r.json()['userResults']['amount']),
-                            r.json()['userResults']['tokenSymbol'],
-                            float(r.json()['userResults']['usdValue']))
+                    user_amount: float | None = r.json()['userResults']['amount']
+                    token_symbol: str | None = r.json()['userResults']['tokenSymbol']
+                    usd_value: str | None = r.json()['userResults']['usdValue']
+
+                    if not user_amount:
+                        user_amount: float = 0
+
+                    else:
+                        user_amount: float = float(user_amount)
+
+                    if not usd_value:
+                        usd_value: float = 0
+
+                    else:
+                        usd_value: float = float(usd_value)
+
+                    if not token_symbol:
+                        token_symbol: str = 'None'
+
+                    return user_amount, token_symbol, usd_value
 
                 logger.info(f'{self.account.address} | {r.text}')
+
+                await asyncio.sleep(1)
 
             except Exception as error:
                 if response_text:
@@ -135,6 +157,8 @@ class Reger:
         if not auth_data:
             return
 
+        logger.success(f'{self.account.address} | Successfully Authorized')
+
         do_claim_result: bool = await self.do_claim(client=client,
                                                     deposit_idx=auth_data[0],
                                                     authorization=auth_data[1])
@@ -152,6 +176,8 @@ class Reger:
         async with loader.lock:
             await append_file(file_folder='result/accounts.txt',
                               file_text=f'{self.account.key.hex()} | {reward_data[1]} {reward_data[0]} | {reward_data[2]}\n')
+
+        logger.success(f'{self.account.address} | Successfully Claimed {reward_data[1]} {reward_data[0]}')
 
 
 async def start_reger(proxy: str | None = None) -> None:
